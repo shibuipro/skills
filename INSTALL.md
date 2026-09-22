@@ -2,8 +2,6 @@
 
 These instructions are for an assistant whose user has asked it to install a skill from `https://github.com/shibuipro/skills`.
 
-Reading this guide for a review does not authorize installation.
-
 ## Select the skill
 
 1. Use the skill name in the user's request.
