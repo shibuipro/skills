@@ -1,0 +1,3 @@
+interface:
+  display_name: "Shibui Business Mapper"
+  short_description: "Map a workflow and create an HTML diagram with Mermaid"

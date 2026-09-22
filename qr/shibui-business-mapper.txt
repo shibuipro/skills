@@ -1,0 +1,1 @@
+Install only shibui-business-mapper from https://github.com/shibuipro/skills. Follow https://raw.githubusercontent.com/shibuipro/skills/main/INSTALL.md, then start the skill.

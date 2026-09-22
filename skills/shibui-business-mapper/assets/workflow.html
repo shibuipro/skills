@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$title_html</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { font-family: system-ui, sans-serif; color: #172033; background: #f8fafc; }
+    #viewport { position: fixed; inset: 0; overflow: auto; overscroll-behavior: contain; cursor: grab; }
+    #viewport.dragging { cursor: grabbing; }
+    #viewport:focus-visible { outline: 2px solid #2563eb; outline-offset: -3px; }
+    #stage { position: relative; min-width: 100%; min-height: 100%; }
+    #diagram { position: absolute; user-select: none; }
+    #diagram svg { display: block; width: 100%; height: 100%; max-width: none; }
+    .overlay { position: fixed; inset: 16px 20px auto; z-index: 2; display: flex; align-items: start; justify-content: space-between; gap: 16px; pointer-events: none; }
+    h1, .controls { margin: 0; background: rgba(255,255,255,.95); border: 1px solid #dce2ea; border-radius: 10px; box-shadow: 0 2px 8px #1720330a; }
+    h1 { min-width: 0; padding: 10px 14px; font-size: 16px; font-weight: 600; line-height: 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .controls { display: flex; flex-shrink: 0; align-items: center; gap: 4px; padding: 4px; pointer-events: auto; }
+    button { min-width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+    button:hover { background: #eef2f7; }
+    button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+    button:disabled { opacity: .4; cursor: default; }
+    #zoom-reset { min-width: 64px; font-variant-numeric: tabular-nums; }
+    #zoom-fit { padding: 0 12px; border-left: 1px solid #dce2ea; border-radius: 0 6px 6px 0; }
+    #notice { position: absolute; top: 88px; left: 24px; right: 24px; max-width: 760px; margin: auto; padding: 24px; background: white; border: 1px solid #dce2ea; border-radius: 10px; cursor: auto; }
+    #notice pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    @media (max-width: 560px) { .overlay { inset: 10px 10px auto; gap: 8px; } h1 { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <main id="viewport" tabindex="0" aria-label="Workflow diagram" aria-describedby="navigation-help" aria-busy="true">
+    <div id="stage"><div id="diagram"></div></div>
+    <div id="notice" role="status">Loading diagram...</div>
+  </main>
+  <div class="overlay">
+    <h1 title="$title_html">$title_html</h1>
+    <div class="controls" role="group" aria-label="Diagram zoom controls">
+      <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (-)" disabled>−</button>
+      <button id="zoom-reset" type="button" aria-label="Reset zoom to 100 percent" title="Reset to actual size (0)" disabled>100%</button>
+      <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (+)" disabled>+</button>
+      <button id="zoom-fit" type="button" title="Fit the complete diagram (F)" disabled>Fit</button>
+    </div>
+  </div>
+  <p id="navigation-help" class="sr-only">Scroll to move through the diagram, or drag with the mouse. Use the zoom buttons or Control and the mouse wheel to zoom. Use arrow keys to scroll.</p>
+  <script id="mermaid-source" type="application/json">$source_json</script>
+  <script type="module">
+    const diagram = document.getElementById('diagram');
+    const viewport = document.getElementById('viewport');
+    const stage = document.getElementById('stage');
+    const notice = document.getElementById('notice');
+    const zoomOut = document.getElementById('zoom-out');
+    const zoomIn = document.getElementById('zoom-in');
+    const zoomReset = document.getElementById('zoom-reset');
+    const zoomFit = document.getElementById('zoom-fit');
+    const source = JSON.parse(document.getElementById('mermaid-source').textContent);
+    try {
+      const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@12.0.0/dist/mermaid.esm.min.mjs');
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: 'default',
+        themeVariables: { fontSize: '20px' },
+        flowchart: { useMaxWidth: false, nodeSpacing: 60, rankSpacing: 70, padding: 22 }
+      });
+      const { svg } = await mermaid.render('workflow-diagram', source);
+      diagram.innerHTML = svg;
+      const element = diagram.querySelector('svg');
+      const bounds = element.viewBox.baseVal;
+      const width = bounds.width;
+      const height = bounds.height;
+      if (!width || !height) throw new Error('The diagram has no visible size.');
+      element.style.maxWidth = 'none';
+      element.style.width = '100%';
+      element.style.height = '100%';
+
+      const padding = 32;
+      const topSpace = 80;
+      const minScale = 0.01;
+      const maxScale = 4;
+      let scale = 1;
+      let left = 0;
+      let top = topSpace;
+
+      function layout() {
+        const diagramWidth = width * scale;
+        const diagramHeight = height * scale;
+        const stageWidth = Math.max(viewport.clientWidth, diagramWidth + padding * 2);
+        const stageHeight = Math.max(viewport.clientHeight, diagramHeight + topSpace + padding);
+        left = (stageWidth - diagramWidth) / 2;
+        top = topSpace + Math.max(0, (viewport.clientHeight - topSpace - padding - diagramHeight) / 2);
+        stage.style.width = stageWidth + 'px';
+        stage.style.height = stageHeight + 'px';
+        diagram.style.width = diagramWidth + 'px';
+        diagram.style.height = diagramHeight + 'px';
+        diagram.style.left = left + 'px';
+        diagram.style.top = top + 'px';
+        zoomReset.textContent = Math.round(scale * 100) + '%';
+        zoomOut.disabled = scale <= minScale;
+        zoomIn.disabled = scale >= maxScale;
+      }
+
+      function zoomTo(nextScale, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) {
+        const sourceX = (viewport.scrollLeft + x - left) / scale;
+        const sourceY = (viewport.scrollTop + y - top) / scale;
+        scale = Math.min(maxScale, Math.max(minScale, nextScale));
+        layout();
+        viewport.scrollLeft = left + sourceX * scale - x;
+        viewport.scrollTop = top + sourceY * scale - y;
+      }
+
+      function showFromTop(nextScale) {
+        scale = Math.min(maxScale, Math.max(minScale, nextScale));
+        layout();
+        viewport.scrollLeft = (stage.offsetWidth - viewport.clientWidth) / 2;
+        viewport.scrollTop = 0;
+      }
+
+      function fit() {
+        showFromTop(Math.min(
+          (viewport.clientWidth - padding * 2) / width,
+          (viewport.clientHeight - topSpace - padding) / height
+        ));
+      }
+
+      zoomOut.addEventListener('click', () => zoomTo(scale / 1.25));
+      zoomIn.addEventListener('click', () => zoomTo(scale * 1.25));
+      zoomReset.addEventListener('click', () => showFromTop(1));
+      zoomFit.addEventListener('click', fit);
+      viewport.addEventListener('wheel', event => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1);
+        zoomTo(scale * Math.exp(-delta * 0.01), event.clientX, event.clientY);
+      }, { passive: false });
+
+      let drag = null;
+      viewport.addEventListener('pointerdown', event => {
+        if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('a')) return;
+        drag = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+        viewport.setPointerCapture(event.pointerId);
+        viewport.classList.add('dragging');
+        viewport.focus({ preventScroll: true });
+        event.preventDefault();
+      });
+      viewport.addEventListener('pointermove', event => {
+        if (!drag) return;
+        viewport.scrollLeft = drag.left - (event.clientX - drag.x);
+        viewport.scrollTop = drag.top - (event.clientY - drag.y);
+      });
+      function stopDrag() {
+        drag = null;
+        viewport.classList.remove('dragging');
+      }
+      viewport.addEventListener('pointerup', stopDrag);
+      viewport.addEventListener('pointercancel', stopDrag);
+      viewport.addEventListener('lostpointercapture', stopDrag);
+
+      document.addEventListener('keydown', event => {
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+        if (event.key === '+' || event.key === '=') zoomTo(scale * 1.25);
+        else if (event.key === '-') zoomTo(scale / 1.25);
+        else if (event.key === '0') showFromTop(1);
+        else if (event.key.toLowerCase() === 'f') fit();
+        else return;
+        event.preventDefault();
+      });
+      new ResizeObserver(() => zoomTo(scale)).observe(viewport);
+      notice.remove();
+      zoomReset.disabled = false;
+      zoomFit.disabled = false;
+      showFromTop(Math.min(1, (viewport.clientWidth - padding * 2) / width));
+    } catch (error) {
+      const message = document.createElement('p');
+      message.textContent = 'The diagram could not render: ' + error.message;
+      const code = document.createElement('pre');
+      code.textContent = source;
+      stage.hidden = true;
+      notice.setAttribute('role', 'alert');
+      notice.replaceChildren(message, code);
+    } finally {
+      viewport.setAttribute('aria-busy', 'false');
+    }
+  </script>
+</body>
+</html>
