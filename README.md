@@ -20,12 +20,6 @@ Replace `shibui-business-mapper` with another skill name from the list below whe
 
 Each ZIP contains one complete skill, including its templates and scripts.
 
-## QR code
-
-The [Business Mapper QR code](qr/shibui-business-mapper.png) contains the installation prompt above. Scan it with a QR reader, copy the text, and send it to your assistant.
-
-[PNG](qr/shibui-business-mapper.png) · [SVG](qr/shibui-business-mapper.svg) · [Prompt text](qr/shibui-business-mapper.txt)
-
 ## Install with the Skills CLI
 
 Requires Node.js and npm. List the available skills without installing them:
@@ -56,19 +50,6 @@ qr/
 ```
 
 Each folder under `skills/` is an independent skill. Its folder name must match the `name` in its `SKILL.md` file. Keep all resources needed by that skill inside its folder.
-
-## Add another skill
-
-1. Add `skills/<skill-name>/SKILL.md` with a name, description, and instructions.
-2. Add the required templates, scripts, or references inside that folder.
-3. Check the skill and add it to the table above.
-4. Create a ZIP with `<skill-name>/` as its top folder. Attach it to the latest release. Keep the other skill ZIPs available in that release.
-
-To package one skill, run this command from `skills/` and replace the example name as needed:
-
-```sh
-python3 -m zipfile -c ../shibui-business-mapper.zip shibui-business-mapper
-```
 
 ## Output requirements
 
